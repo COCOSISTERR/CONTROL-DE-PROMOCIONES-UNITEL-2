@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control Semanal - Canal de TV UNITEL</title>
+    <link rel="icon" type="image/x-icon" href="img/unitel.ico">
+    <!-- ExcelJS para exportar Excel -->
+    <script src="https://cdn.jsdelivr.net/npm/exceljs@4.3.0/dist/exceljs.min.js"></script>
+    <!-- SheetJS para leer archivos .xls/.xlsx -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- Supabase JS v2 -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 0; background: linear-gradient(135deg, #ecf0f3 0%, #f4f7f9 100%); min-height: 100vh; }
+
+        /* ===== LOADING SCREEN UNITEL ===== */
+        #loadingScreen {
+            position: fixed; inset: 0; z-index: 9999;
+            background: url('img/fondo.webp') center center / cover no-repeat;
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center; gap: 28px;
+        }
+        .loading-logo-wrap {
+            position: relative; display: flex; justify-content: center; align-items: center;
+        }
+        .loading-logo-wrap::before {
+            content: '';
+            position: absolute;
+            width: 110px; height: 110px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.15);
+            animation: pulse-ring 1.6s ease-out infinite;
+        }
+        .loading-logo-wrap::after {
+            content: '';
+            position: absolute;
+            width: 90px; height: 90px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.22);
+            animation: pulse-ring 1.6s ease-out infinite 0.4s;
+        }
+        /* SIN fondo blanco ni padding — logo limpio sobre el fondo rojo */
+        .loading-logo {
+            width: 150px; height: 150px;
+            object-fit: contain;
+            position: relative; z-index: 1;
+            filter: drop-shadow(0 4px 16px rgba(0,0,0,0.3));
+        }
+        @keyframes pulse-ring {
+            0%   { transform: scale(0.85); opacity: 0.7; }
+            70%  { transform: scale(1.25); opacity: 0; }
+            100% { transform: scale(1.25); opacity: 0; }
+        }
+        .loading-brand {
+            color: white; font-size: 26px; font-weight: 800;
+            letter-spacing: 1px; text-shadow: 0 2px 8px rgba(0,0,0,0.25);
+        }
+        .loading-sub {
+            color: rgba(255,255,255,0.85); font-size: 13px;
+            font-weight: 500; letter-spacing: 2px; text-transform: uppercase;
+        }
+        .loading-bar-wrap {
+            width: 200px; height: 4px;
+            background: rgba(255,255,255,0.25);
+            border-radius: 99px; overflow: hidden;
+        }
+        .loading-bar {
+            height: 100%; width: 40%;
+            background: rgba(255,255,255,0.9);
+            border-radius: 99px;
+            animation: slide-bar 1.2s ease-in-out infinite alternate;
+        }
+        @keyframes slide-bar {
+            from { transform: translateX(-100%); }
+            to   { transform: translateX(350%); }
+        }
+
+        /* ===== LOGIN ===== */
+        #loginScreen { position: fixed; inset: 0; background: url('img/fondo.webp') center center / cover no-repeat; display: flex; justify-content: center; align-items: center; z-index: 2000; }
+        .login-container { background: white; padding: 40px; border-radius: 16px; box-shadow: 0 20px 60px rgba(30,60,114,0.3); width: 100%; max-width: 420px; text-align: center; }
+        .login-container h1 { color: #1e3c72; margin-bottom: 15px; font-size: 28px; font-weight: 700; }
+        .login-container h3 { color: #666; margin-bottom: 10px; font-weight: 500; }
+        .login-logo { height: 50px; margin: 20px auto; }
+        .login-container input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #e0e6ed; border-radius: 8px; font-size: 14px; transition: all 0.3s ease; background: #f9fafb; }
+        .login-container input:focus { outline: none; border-color: #2a5298; background: white; }
+        .login-container button { width: 100%; padding: 12px; margin-top: 15px; background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; }
+        .login-container button:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(30,60,114,0.3); }
+
+        /* ===== REALTIME INDICATOR ===== */
+        #realtimeDot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #ccc; margin-left: 8px; vertical-align: middle; transition: background 0.3s; }
+        #realtimeDot.connected { background: #27ae60; box-shadow: 0 0 6px #27ae60; }
+        #realtimeDot.disconnected { background: #e74c3c; }
+
+        /* ===== MAIN ===== */
+        .container { max-width: 1400px; margin: 20px auto; background: white; border-radius: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); padding: 30px; display: none; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; border-bottom: 3px solid #2a5298; padding-bottom: 15px; flex-wrap: wrap; gap: 15px; }
+        .header h1 { color: #1e3c72; margin: 0; flex: 1; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+        .header-logo { height: 40px; }
+        .user-info { display: flex; gap: 15px; align-items: center; flex-wrap: wrap; font-weight: 600; }
+        .user-badge { background: linear-gradient(135deg, #2a5298 0%, #1e3c72 100%); color: white; padding: 8px 16px; border-radius: 20px; font-size: 13px; }
+        .logout-btn { background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%) !important; color: white; padding: 10px 16px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; transition: all 0.3s ease; }
+        .logout-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(231,76,60,0.3); }
+
+        /* ===== ALERT ===== */
+        .alert { padding: 15px; border-radius: 8px; margin-bottom: 15px; display: none; border-left: 4px solid; }
+        .alert.show { display: block; }
+        .alert.success { background: #ecf9f1; color: #0f6937; border-left-color: #27ae60; }
+        .alert.error { background: #fef2f2; color: #b42620; border-left-color: #e74c3c; }
+        .alert.warning { background: #fffbeb; color: #9a3412; border-left-color: #f59e0b; }
+
+        /* ===== TABS ===== */
+        .tabs { display: flex; gap: 0; margin-bottom: 25px; flex-wrap: wrap; border-bottom: 2px solid #e0e6ed; }
+        .tab-btn { padding: 12px 20px; background: transparent; border: none; border-bottom: 3px solid transparent; border-radius: 0; cursor: pointer; font-weight: 600; transition: all 0.3s ease; color: #7f8c8d; font-size: 14px; }
+        .tab-btn.active { color: #1e3c72; border-bottom-color: #2a5298; }
+        .tab-btn:hover { color: #2a5298; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* ===== DAY TABS ===== */
+        .day-tabs { display: flex; gap: 8px; margin-bottom: 25px; flex-wrap: wrap; padding: 15px; background: #f9fafb; border-radius: 12px; border: 1px solid #e0e6ed; }
+        .day-tab { padding: 10px 16px; background: white; border: 2px solid #e0e6ed; border-radius: 8px; cursor: pointer; font-weight: 600; transition: all 0.3s ease; color: #7f8c8d; font-size: 13px; }
+        .day-tab.active { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; border-color: #2a5298; }
+        .day-tab:hover { border-color: #2a5298; color: #1e3c72; }
+
+        /* ===== FORMS ===== */
+        .form-group { margin-bottom: 20px; display: flex; gap: 10px; flex-wrap: wrap; }
+        .form-group label { display: block; margin-bottom: 8px; color: #2c3e50; font-weight: 600; width: 100%; }
+        input, select, textarea { padding: 10px 12px; border: 1px solid #e0e6ed; border-radius: 8px; font-size: 14px; font-family: inherit; background: #f9fafb; transition: all 0.3s ease; }
+        input:focus, select:focus, textarea:focus { outline: none; border-color: #2a5298; box-shadow: 0 0 8px rgba(42,82,152,0.15); background: white; }
+        textarea { resize: vertical; min-height: 80px; }
+        button { padding: 10px 16px; background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; transition: all 0.3s ease; margin: 4px; }
+        button:hover { background: linear-gradient(135deg, #1a2f57 0%, #22407a 100%); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(30,60,114,0.25); }
+        button.danger { background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%); }
+        button.danger:hover { box-shadow: 0 4px 12px rgba(231,76,60,0.25); }
+        button.success { background: linear-gradient(135deg, #27ae60 0%, #229954 100%); }
+        button.success:hover { box-shadow: 0 4px 12px rgba(39,174,96,0.25); }
+        button.warning { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+        button.warning:hover { box-shadow: 0 4px 12px rgba(245,158,11,0.25); }
+        button:disabled { opacity: 0.6; cursor: not-allowed; transform: none !important; }
+
+        /* ===== IMPORT ===== */
+        .import-drop-zone { border: 2px dashed #2a5298; border-radius: 12px; padding: 30px; text-align: center; background: #f0f7ff; cursor: pointer; transition: all 0.3s ease; }
+        .import-drop-zone:hover, .import-drop-zone.drag-over { background: #dbeeff; border-color: #1e3c72; }
+        .import-drop-zone .drop-icon { font-size: 48px; margin-bottom: 10px; }
+        .import-drop-zone .drop-text { font-size: 16px; font-weight: 600; color: #1e3c72; }
+        .import-drop-zone .drop-hint { font-size: 13px; color: #7f8c8d; margin-top: 6px; }
+        .import-preview-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .import-preview-table th { background: #1e3c72; color: white; padding: 8px; text-align: left; position: sticky; top: 0; }
+        .import-preview-table td { padding: 7px 8px; border: 1px solid #e0e6ed; }
+        .import-preview-table tbody tr:nth-child(even) { background: #f4f8ff; }
+        .import-summary { background: #ecf9f1; border-left: 4px solid #27ae60; padding: 12px 16px; border-radius: 8px; margin-bottom: 15px; font-size: 14px; }
+        .import-warning-box { background: #fffbeb; border-left: 4px solid #f59e0b; padding: 12px 16px; border-radius: 8px; margin-bottom: 15px; font-size: 14px; }
+        .category-badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; background: #e0ecff; color: #1e3c72; }
+
+        /* ===== PROMOTION CARDS ===== */
+        #promotionsContainer { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; align-items: start; }
+        .promotion-card { background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%); border: 2px solid #dbe5f0; border-radius: 12px; padding: 14px; transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(15,23,42,0.06); position: relative; overflow: hidden; display: flex; flex-direction: column; }
+        .promotion-card::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 4px; background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); }
+        .promotion-card:hover { box-shadow: 0 10px 20px rgba(30,60,114,0.12); border-color: #2a5298; transform: translateY(-2px); }
+        .promotion-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
+        .promotion-title-compact { font-weight: 800; color: #16325c; font-size: 16px; margin: 0; line-height: 1.2; flex: 1; }
+        .promotion-name-line { font-size: 12px; color: #555; margin-bottom: 8px; line-height: 1.3; font-weight: 500; }
+        .promotion-meta { display: flex; gap: 6px; flex-wrap: wrap; font-size: 11px; margin-bottom: 10px; }
+        .promotion-meta span { background: #eef4fb; color: #284766; padding: 4px 8px; border-radius: 999px; font-weight: 600; }
+        .badge { display: inline-block; padding: 4px 10px; border-radius: 999px; font-weight: 700; font-size: 11px; white-space: nowrap; }
+        .badge.ok { background: #d4f1d4; color: #0f6937; }
+        .badge.error { background: #f8d4d4; color: #b42620; }
+        .badge.pending { background: #d4e8f8; color: #1565c0; }
+        .promotion-comment { background: #f7faff; padding: 10px; border-left: 3px solid #2a5298; border-radius: 8px; margin: 8px 0 0; font-size: 11px; color: #4a5565; line-height: 1.4; }
+        .promotion-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: auto; padding-top: 10px; border-top: 1px solid #e0e6ed; }
+        .promotion-actions button { padding: 6px 10px; font-size: 11px; margin: 0; }
+        
+        /* Estados de promoción con colores tonales bajos */
+        .promotion-card[style*="background: linear-gradient(180deg, #f0fff4"] { border-left: 4px solid #52b788; }
+        .promotion-card[style*="background: linear-gradient(180deg, #fff5f5"] { border-left: 4px solid #d62828; }
+
+        /* ===== TABLE ===== */
+        .programming-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        .programming-table thead { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; }
+        .programming-table th { padding: 12px; text-align: left; font-weight: 600; border: 1px solid #e0e6ed; }
+        .programming-table td { padding: 12px; border: 1px solid #e0e6ed; background: #f9fafb; }
+        .programming-table tbody tr:hover { background: #e8f4ff; }
+
+        /* ===== MODAL ===== */
+        .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1500; padding: 20px; }
+        .modal.active { display: flex; }
+        .modal-content { background: white; border-radius: 12px; padding: 25px; max-width: 500px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+        .modal-header { font-size: 20px; font-weight: 600; color: #1e3c72; margin-bottom: 20px; border-bottom: 2px solid #e0e6ed; padding-bottom: 15px; }
+        .modal-actions { display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; }
+        .modal-actions button { margin: 0; }
+
+        /* ===== CALENDAR ===== */
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin-bottom: 20px; }
+        .calendar-header { font-weight: 600; text-align: center; padding: 10px 8px; background: linear-gradient(135deg, #2a5298 0%, #1e3c72 100%); color: white; border-radius: 6px; font-size: 13px; }
+        .calendar-day { min-height: 100px; background: #f9fafb; border-radius: 8px; padding: 8px; cursor: pointer; border: 1px solid #e0e6ed; transition: all 0.3s ease; font-size: 12px; position: relative; }
+        .calendar-day:hover { background: #e8f4ff; border-color: #2a5298; }
+        .calendar-day.today { border: 2px solid #2a5298; background: #e8f4ff; }
+        .calendar-day-number { font-weight: 600; color: #1e3c72; margin-bottom: 4px; }
+        .calendar-note-badge { position: absolute; bottom: 4px; right: 4px; background: #27ae60; color: white; font-size: 10px; padding: 2px 4px; border-radius: 4px; font-weight: bold; }
+        .calendar-note-section { margin-top: 20px; padding: 15px; background: #f0f8ff; border-radius: 8px; border-left: 4px solid #2a5298; }
+        .calendar-note-section textarea { width: 100%; min-height: 60px; resize: vertical; margin-bottom: 10px; }
+        .calendar-note-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+        /* ===== STATS ===== */
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 25px; }
+        .stat-box { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; padding: 20px; border-radius: 12px; text-align: center; box-shadow: 0 4px 12px rgba(30,60,114,0.15); transition: all 0.3s ease; }
+        .stat-box:hover { transform: translateY(-4px); }
+        .stat-number { font-size: 28px; font-weight: bold; margin: 10px 0; }
+        .stat-label { font-size: 14px; opacity: 0.9; }
+
+        /* ===== CHANGE LOG ===== */
+        .change-item { background: #f9fafb; border-left: 4px solid #2a5298; padding: 12px; margin-bottom: 12px; border-radius: 8px; font-size: 13px; }
+        .change-item.new { border-left-color: #27ae60; background: #ecf9f1; }
+        .change-item.modified { border-left-color: #f59e0b; background: #fffbeb; }
+        .change-item.deleted { border-left-color: #e74c3c; background: #fef2f2; }
+
+        /* ===== PROGRAM IMAGE ===== */
+        .program-image-container { width: 100%; min-height: 600px; border: 2px dashed #e0e6ed; border-radius: 16px; background: #f9fafb; transition: all 0.3s ease; }
+        .program-image-upload { width: 100%; min-height: 600px; display: flex; justify-content: center; align-items: center; cursor: pointer; }
+        .program-image-upload input[type="file"] { display: none; }
+        .upload-label { text-align: center; cursor: pointer; padding: 60px; }
+        .upload-icon { font-size: 72px; margin-bottom: 20px; }
+        .upload-text { font-size: 20px; font-weight: 600; color: #1e3c72; margin-bottom: 10px; }
+        .upload-hint { font-size: 14px; color: #7f8c8d; }
+        .program-image-display { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 20px; padding: 20px; }
+        .program-image-display img { width: 100%; max-height: 700px; object-fit: contain; border-radius: 12px; }
+        .program-image-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+
+        /* ===== CONTROLS ===== */
+        .controls-section { display: flex; gap: 15px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; padding: 15px; background: #f9fafb; border-radius: 12px; border: 1px solid #e0e6ed; }
+        .search-container { display: flex; gap: 10px; flex: 1; min-width: 300px; }
+        .search-container input, .search-container select { flex: 1; padding: 10px 12px !important; }
+        .buttons-container { display: flex; gap: 10px; flex-wrap: wrap; }
+        .buttons-container button { padding: 10px 16px; font-size: 14px; margin: 0; }
+
+        /* ===== RESPONSIVE ===== */
+        @media (max-width: 768px) {
+            .container { padding: 15px; }
+            .header { flex-direction: column; }
+            .tabs { flex-direction: column; }
+            .day-tabs { flex-direction: column; }
+            .day-tab { width: 100%; text-align: center; }
+            .stats-grid { grid-template-columns: 1fr; }
+            .controls-section { flex-direction: column; align-items: stretch; }
+            .buttons-container { order: 1; justify-content: center; }
+            .search-container { order: 2; min-width: auto; }
+        }
+        .hidden { display: none !important; }
+        
+        /* Modal para comentario de error */
+        #errorCommentModal .modal-content { max-width: 400px; }
+    </style>
+</head>
+<body>
+
+<!-- LOADING SCREEN UNITEL -->
+<div id="loadingScreen">
+    <div class="loading-logo-wrap">
+        <img src="img/unitel.webp" alt="UNITEL" class="loading-logo">
+    </div>
+    <div class="loading-brand">Control Semanal</div>
+    <div class="loading-sub">Canal de TV UNITEL</div>
+    <div class="loading-bar-wrap">
+        <div class="loading-bar"></div>
+    </div>
+</div>
+
+<!-- LOGIN SCREEN -->
+<div id="loginScreen" style="display:none;">
+    <div class="login-container">
+        <h1>🎬 Control Semanal</h1>
+        <img src="img/unitel.webp" alt="UNITEL" class="login-logo">
+        <h3>Canal de TV UNITEL</h3>
+        <input type="text" id="loginName" placeholder="Introduce tu Nombre" maxlength="40">
+        <input type="password" id="loginCode" placeholder="Código de acceso:" inputmode="numeric" maxlength="4" style="letter-spacing:4px;">
+        <button onclick="login()">🔓 Acceder</button>
+        <div id="loginError" style="color:#e74c3c;margin-top:15px;font-weight:500;"></div>
+    </div>
+</div>
+
+<!-- MAIN CONTAINER -->
+<div class="container" id="mainContainer">
+    <div class="header">
+        <h1>
+            🎬 Control Semanal
+            <img src="img/unitel.webp" alt="UNITEL" class="header-logo">
+            <span id="realtimeDot" title="Estado de conexión en tiempo real"></span>
+        </h1>
+        <div class="user-info">
+            <div class="user-badge" id="userBadge">👤 Usuario</div>
+            <div id="currentDate" style="font-size:13px;"></div>
+            <button class="logout-btn" onclick="logout()">🚪 Cerrar Sesión</button>
+        </div>
+    </div>
+
+    <div class="alert" id="alert"></div>
+
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('promociones', this)">📺 Promociones del Día</button>
+        <button class="tab-btn" onclick="switchTab('programacion', this)">🎥 Programación Semanal</button>
+        <button class="tab-btn" onclick="switchTab('calendario', this)">📅 Calendario</button>
+        <button class="tab-btn" onclick="switchTab('cambios', this)">👁️ Cambios del Admin</button>
+        <button class="tab-btn" onclick="switchTab('progreso', this)">📊 Progreso</button>
+    </div>
+
+    <!-- TAB 1: PROMOCIONES -->
+    <div class="tab-content active" id="tab-promociones">
+        <h2>📺 Promociones por Día</h2>
+        <div class="day-tabs" id="dayTabs"></div>
+        <div class="controls-section">
+            <div class="search-container">
+                <input type="text" id="daySearchInput" placeholder="Buscar promociones...">
+                <select id="daySearchCategory">
+                    <option value="">- Filtro -</option>
+                    <optgroup label="📺 CATEGORÍAS">
+                        <option value="diario">DIARIO</option>
+                        <option value="streaming">STREAMING</option>
+                        <option value="radio">RADIO</option>
+                        <option value="mundial">MUNDIAL</option>
+                        <option value="apagon">APAGÓN</option>
+                        <option value="momento_simpson">MOMENTO SIMPSON</option>
+                        <option value="masterchef">MASTERCHEF</option>
+                        <option value="presentacion">PRESENTACIÓN</option>
+                        <option value="despedida">DESPEDIDA</option>
+                    </optgroup>
+                    <optgroup label="📍 LOCALES">
+                        <option value="local_scz">SANTA CRUZ (SC)</option>
+                        <option value="local_lp">LA PAZ (LP)</option>
+                        <option value="local_ch">COCHABAMBA (CH)</option>
+                    </optgroup>
+                </select>
+            </div>
+            <div class="buttons-container">
+                <button onclick="openAddPromotionModal()" id="btnAddPromo">➕ Agregar Promoción</button>
+                <button id="btnFilterPending" onclick="toggleFilterPending(this)" style="background:linear-gradient(135deg,#f39c12 0%,#d68910 100%);">🔍 Pendientes</button>
+                <button onclick="openImportXlsModal()" id="btnImportDay" style="background:linear-gradient(135deg,#7b2ff7 0%,#5a1fcf 100%);">📥 Importar</button>
+                <button onclick="openCopyPromotionsModal()" class="warning" id="btnCopyPromo">📋 Copiar</button>
+                <button onclick="exportToExcel()" class="success">📊 Exportar Excel</button>
+                <button onclick="openMailClient()" class="success">✉️ Enviar por Correo</button>
+                <button onclick="cleanDayPromotions()" id="btnCleanDay" class="warning">🧹 Limpiar Día</button>
+                <button onclick="cleanWeekPromotions()" id="btnDeleteWeek" class="warning">🧹 Limpiar Semana</button>
+                <button onclick="deleteDayPromotions()" id="btnDeleteDay" class="danger">🗑️ Eliminar Día</button>
+            </div>
+        </div>
+        <h3>📢 Promociones</h3>
+        <div id="promotionsContainer"></div>
+    </div>
+
+    <!-- TAB 2: PROGRAMACIÓN SEMANAL -->
+    <div class="tab-content" id="tab-programacion">
+        <h2>🎥 Programación Semanal</h2>
+
+        <div style="margin-bottom:18px;padding:15px;background:#f9fafb;border-radius:12px;border:1px solid #e0e6ed;display:flex;align-items:center;gap:15px;flex-wrap:wrap;">
+            <div style="flex:1;min-width:220px;">
+                <div style="font-weight:700;color:#1e3c72;font-size:15px;">📥 Importar Programación Semanal</div>
+                <div style="font-size:13px;color:#7f8c8d;margin-top:4px;">Carga el archivo .xlsm con las hojas Lunes→Domingo y crea todas las promociones de la semana de una vez</div>
+            </div>
+            <button id="btnImportWeekly" onclick="openImportWeeklyModal()" style="background:linear-gradient(135deg,#7b2ff7 0%,#5a1fcf 100%);white-space:nowrap;">
+                📋 Importar XLSM Semanal
+            </button>
+            <button id="btnDeleteWeekFull" onclick="deleteWeekPromotions()" class="danger" style="white-space:nowrap;">
+                🗑️ Eliminar Semana Completa
+            </button>
+        </div>
+
+        <div class="program-image-container">
+            <div class="program-image-upload" id="programImageUpload">
+                <input type="file" id="programImageInput" accept="image/*" onchange="handleProgramImageUpload(event)">
+                <label for="programImageInput" class="upload-label">
+                    <div class="upload-icon">🖼️</div>
+                    <div class="upload-text">Haz clic para subir una imagen</div>
+                    <div class="upload-hint">Todos los usuarios verán esta imagen en tiempo real</div>
+                </label>
+            </div>
+            <div class="program-image-display" id="programImageDisplay" style="display:none;">
+                <img id="programImage" src="" alt="Programación Semanal">
+                <div class="program-image-actions">
+                    <button onclick="document.getElementById('programImageInput').click()">🔄 Cambiar Imagen</button>
+                    <button class="danger" onclick="removeProgramImage()">🗑️ Eliminar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 3: CALENDARIO -->
+    <div class="tab-content" id="tab-calendario">
+        <h2>📅 Calendario Mensual</h2>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+            <button onclick="previousMonth()">◀ Anterior</button>
+            <h3 id="calendarTitle" style="margin:0;flex:1;text-align:center;"></h3>
+            <button onclick="nextMonth()">Siguiente ▶</button>
+        </div>
+        <div class="calendar-grid" id="calendarGrid"></div>
+        <div id="calendarTasks" style="margin-top:20px;"></div>
+    </div>
+
+    <!-- TAB 4: CAMBIOS -->
+    <div class="tab-content" id="tab-cambios">
+        <h2>👁️ Vista de Cambios del Admin</h2>
+        <div id="changesContainer"></div>
+    </div>
+
+    <!-- TAB 5: PROGRESO -->
+    <div class="tab-content" id="tab-progreso">
+        <h2>📊 Progreso General</h2>
+        <div class="stats-grid">
+            <div class="stat-box"><div class="stat-label">Promociones Gestionadas</div><div class="stat-number" id="statTotalPromotions">0</div></div>
+            <div class="stat-box"><div class="stat-label">Estado OK ✅</div><div class="stat-number" id="statOkPromotions">0</div></div>
+            <div class="stat-box"><div class="stat-label">Estado ERROR ❌</div><div class="stat-number" id="statErrorPromotions">0</div></div>
+            <div class="stat-box"><div class="stat-label">% Cumplimiento</div><div class="stat-number" id="statCompliancePercent">0%</div></div>
+        </div>
+        <h3>Progreso por Día</h3>
+        <table class="programming-table">
+            <thead><tr><th>Día</th><th>Promociones</th><th>Revisadas</th><th>No Revisadas</th><th>% Cumplimiento</th></tr></thead>
+            <tbody id="progressBody"></tbody>
+        </table>
+        <h3>Cambios Realizados</h3>
+        <div id="changeHistoryContainer"></div>
+    </div>
+</div>
+
+<!-- ===== MODALS ===== -->
+
+<!-- MODAL: ADD/EDIT PROMOTION -->
+<div class="modal" id="promotionModal">
+    <div class="modal-content">
+        <div class="modal-header" id="promotionModalTitle">➕ Agregar Promoción</div>
+        <div class="form-group">
+            <label>Código</label>
+            <input type="text" id="promotionCode" list="promoCodeList" placeholder="Ej: PRM-001">
+            <datalist id="promoCodeList"></datalist>
+        </div>
+        <div class="form-group">
+            <label>Nombre de la Programación</label>
+            <input type="text" id="promotionName" list="promoNameList" placeholder="Ej: Promo Samsung">
+            <datalist id="promoNameList"></datalist>
+        </div>
+        <div class="form-group">
+            <label>Categoría</label>
+            <select id="promotionCategory">
+                <option value="">- Seleccionar -</option>
+                <option value="diario">DIARIO</option>
+                <option value="streaming">STREAMING</option>
+                <option value="radio">RADIO</option>
+                <option value="digital">DIGITAL</option>
+                <option value="mundial">MUNDIAL</option>
+                <option value="apagon">APAGON</option>
+                <option value="deportes">DEPORTES</option>
+                <option value="momento_simpson">MOMENTO SIMPSON</option>
+                <option value="id">ID</option>
+                <option value="masterchef">MASTERCHEF</option>
+                <option value="presentacion">PRESENTACIÓN</option>
+                <option value="despedida">DESPEDIDA</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Nivel</label>
+            <select id="promotionLevel">
+                <option value="generica">GENÉRICA</option>
+                <option value="local_scz">LOCAL SCZ</option>
+                <option value="local_lp">LOCAL LP</option>
+                <option value="local_ch">LOCAL CH</option>
+                <option value="caracteristica">COLOCAR LA CARACTERÍSTICA</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Comentarios</label>
+            <textarea id="promotionComments" placeholder="Comentarios sobre la promoción..."></textarea>
+        </div>
+        <div class="modal-actions">
+            <button onclick="closeModal('promotionModal')">Cancelar</button>
+            <button class="success" onclick="savePromotion()">💾 Guardar</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: IMPORT XLS -->
+<div class="modal" id="importXlsModal">
+    <div class="modal-content" style="max-width:700px;">
+        <div class="modal-header">📥 Importar Promociones desde XLS</div>
+        <div id="importStep1">
+            <div class="import-drop-zone" id="importDropZone" onclick="document.getElementById('importFileInput').click()">
+                <div class="drop-icon">📂</div>
+                <div class="drop-text">Arrastra el archivo XLS aquí o haz clic para seleccionar</div>
+                <div class="drop-hint">Archivos tipo: SCZ MIERCOLES 29 ABRIL 2026.xls</div>
+            </div>
+            <input type="file" id="importFileInput" accept=".xls,.xlsx" style="display:none" onchange="handleImportFile(event)">
+        </div>
+        <div id="importStep2" style="display:none;">
+            <div class="import-summary" id="importSummary"></div>
+            <div class="import-warning-box" id="importWarning" style="display:none;"></div>
+            <div style="max-height:280px;overflow-y:auto;border:1px solid #e0e6ed;border-radius:8px;margin-bottom:15px;">
+                <table class="import-preview-table">
+                    <thead><tr><th>Código</th><th>Descripción</th><th>Categoría</th><th>Nivel</th></tr></thead>
+                    <tbody id="importPreviewBody"></tbody>
+                </table>
+            </div>
+            <div class="form-group">
+                <label>📅 Importar al día:</label>
+                <select id="importTargetDay" style="width:100%">
+                    <option value="monday">Lunes</option><option value="tuesday">Martes</option>
+                    <option value="wednesday">Miércoles</option><option value="thursday">Jueves</option>
+                    <option value="friday">Viernes</option><option value="saturday">Sábado</option>
+                    <option value="sunday">Domingo</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>⚠️ Si ya existen promociones en ese día:</label>
+                <select id="importConflictMode" style="width:100%">
+                    <option value="append">➕ Agregar las nuevas (mantener existentes)</option>
+                    <option value="replace">🔄 Reemplazar todo</option>
+                    <option value="skip_duplicates">🔍 Solo agregar las que no existan (por código)</option>
+                </select>
+            </div>
+        </div>
+        <div class="modal-actions">
+            <button onclick="closeModal('importXlsModal')">Cancelar</button>
+            <button id="importConfirmBtn" class="success" onclick="executeImport()" style="display:none;background:linear-gradient(135deg,#7b2ff7 0%,#5a1fcf 100%);">✅ Importar</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: COPY PROMOTIONS -->
+<div class="modal" id="copyPromotionsModal">
+    <div class="modal-content" style="max-width:600px;">
+        <div class="modal-header">📋 Copiar Promociones</div>
+        <div class="form-group">
+            <label>Día de Origen:</label>
+            <select id="copySourceDay" onchange="updateCopySourcePreview()">
+                <option value="monday">Lunes</option><option value="tuesday">Martes</option>
+                <option value="wednesday">Miércoles</option><option value="thursday">Jueves</option>
+                <option value="friday">Viernes</option><option value="saturday">Sábado</option>
+                <option value="sunday">Domingo</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Copiar:</label>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <label style="display:flex;align-items:center;gap:5px;font-weight:normal;">
+                    <input type="radio" name="copyMode" value="all" checked onchange="updateCopySourcePreview()"> 📋 Todas
+                </label>
+                <label style="display:flex;align-items:center;gap:5px;font-weight:normal;">
+                    <input type="radio" name="copyMode" value="one" onchange="updateCopySourcePreview()"> 🔽 Una específica
+                </label>
+            </div>
+        </div>
+        <div class="form-group" id="singlePromoSelect" style="display:none;">
+            <label>Seleccionar Promoción:</label>
+            <select id="copySinglePromo" onchange="updateCopySourcePreview()">
+                <option value="">- Seleccionar -</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Día de Destino:</label>
+            <select id="copyTargetDay">
+                <option value="monday">Lunes</option><option value="tuesday">Martes</option>
+                <option value="wednesday">Miércoles</option><option value="thursday">Jueves</option>
+                <option value="friday">Viernes</option><option value="saturday">Sábado</option>
+                <option value="sunday">Domingo</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>📄 Preview:</label>
+            <div id="copyPreview" style="background:#f9fafb;border:1px solid #e0e6ed;border-radius:8px;padding:10px;max-height:150px;overflow-y:auto;font-size:13px;"></div>
+        </div>
+        <div class="modal-actions">
+            <button onclick="closeModal('copyPromotionsModal')">Cancelar</button>
+            <button class="warning" onclick="executeCopyPromotions()">📋 Copiar</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: IMPORTAR XLSM SEMANAL -->
+<div class="modal" id="weeklyImportModal">
+    <div class="modal-content" style="max-width:680px;">
+        <div class="modal-header">📋 Importar Programación Semanal (XLSM)</div>
+        <div id="weeklyImportStep1">
+            <div class="import-drop-zone" id="weeklyImportDropZone" onclick="document.getElementById('weeklyImportFileInput').click()">
+                <div class="drop-icon">📂</div>
+                <div class="drop-text">Arrastra el archivo .xlsm aquí o haz clic para seleccionar</div>
+                <div class="drop-hint">Ej: Control_promociones_04_AL_10_MAYO_2026.xlsm — debe tener hojas Lunes, Martes, Miércoles…</div>
+            </div>
+            <input type="file" id="weeklyImportFileInput" accept=".xls,.xlsx,.xlsm" style="display:none" onchange="handleWeeklyImportFile(event)">
+        </div>
+        <div id="weeklyImportStep2" style="display:none;">
+            <div class="import-summary" id="weeklyImportFilename"></div>
+            <div style="max-height:260px;overflow-y:auto;border:1px solid #e0e6ed;border-radius:8px;margin-bottom:15px;">
+                <table class="import-preview-table" style="width:100%;">
+                    <thead>
+                        <tr>
+                            <th>Día</th>
+                            <th style="text-align:center;">Promociones</th>
+                            <th style="text-align:center;">Estado actual</th>
+                        </tr>
+                    </thead>
+                    <tbody id="weeklyImportSummaryBody"></tbody>
+                </table>
+            </div>
+            <div class="form-group">
+                <label>⚠️ Si ya existen promociones en un día:</label>
+                <select id="weeklyImportConflictMode" style="width:100%">
+                    <option value="append">➕ Agregar las nuevas (mantener las existentes)</option>
+                    <option value="replace">🔄 Reemplazar todo (limpiar cada día antes de importar)</option>
+                    <option value="skip_duplicates">🔍 Solo agregar las que no existan (por código)</option>
+                </select>
+            </div>
+            <div style="background:#e3f2fd;border-left:4px solid #1565c0;padding:12px 16px;border-radius:8px;font-size:13px;color:#1565c0;">
+                💡 Las promociones se importarán con estado <strong>PENDIENTE</strong>. Cada operador deberá marcarlas como OK o ERROR.
+            </div>
+        </div>
+        <div class="modal-actions">
+            <button onclick="closeModal('weeklyImportModal')">Cancelar</button>
+            <button id="weeklyImportConfirmBtn" onclick="executeWeeklyImport()" style="display:none;background:linear-gradient(135deg,#7b2ff7 0%,#5a1fcf 100%);">
+                ✅ Importar Semana Completa
+            </button>
+        </div>
+    </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
