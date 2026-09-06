@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Control Semanal - Canal de TV UNITEL</title>
+    <title>Control Semanal - UNITEL</title>
     <link rel="icon" type="image/x-icon" href="img/unitel.ico">
     <!-- ExcelJS para exportar Excel -->
     <script src="https://cdn.jsdelivr.net/npm/exceljs@4.3.0/dist/exceljs.min.js"></script>
@@ -156,7 +156,16 @@
 
         /* ===== PROMOTION CARDS ===== */
         #promotionsContainer { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; align-items: start; }
-        .promotion-card { background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%); border: 2px solid #dbe5f0; border-radius: 12px; padding: 14px; transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(15,23,42,0.06); position: relative; overflow: hidden; display: flex; flex-direction: column; }
+        .promotion-card { background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%); border: 2px solid #dbe5f0; border-radius: 12px; padding: 14px; transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(15,23,42,0.06); position: relative; overflow: visible; display: flex; flex-direction: column; height: auto; min-height: 0; }
+        /* Modo vertical: expansión completa sin recortes */
+        #promotionsContainer.blocks-mode { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; align-items: start; }
+        #promotionsContainer.vertical-mode { display: flex; flex-direction: column; gap: 6px; width: 100%; max-width: 100%; }
+        #promotionsContainer.vertical-mode .promotion-card { width: 100%; max-width: 100%; padding: 10px 14px; overflow: visible; height: auto; min-height: 0; flex-shrink: 0; }
+        #promotionsContainer.vertical-mode .promotion-card:hover { transform: none; }
+        #promotionsContainer.vertical-mode .promotion-header { flex-wrap: wrap; }
+        #promotionsContainer.vertical-mode .promotion-meta { flex-wrap: wrap; }
+        #promotionsContainer.vertical-mode .promotion-actions { flex-wrap: wrap; }
+        #promotionsContainer.vertical-mode .promotion-comment { overflow: visible; white-space: normal; word-break: break-word; }
         .promotion-card::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 4px; background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); }
         .promotion-card:hover { box-shadow: 0 10px 20px rgba(30,60,114,0.12); border-color: #2a5298; transform: translateY(-2px); }
         .promotion-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
@@ -237,15 +246,30 @@
 
         /* ===== RESPONSIVE ===== */
         @media (max-width: 768px) {
-            .container { padding: 15px; }
+            body { overflow-x: hidden; }
+            .container { width: 100%; margin: 0; padding: 12px; border-radius: 0; }
             .header { flex-direction: column; }
+            .header h1 { width: 100%; justify-content: center; text-align: center; font-size: 22px; }
+            .user-info { width: 100%; justify-content: center; gap: 8px; }
+            .user-info #currentDate { width: 100%; text-align: center; }
+            .logout-btn { width: 100%; }
             .tabs { flex-direction: column; }
+            .tab-btn { width: 100%; text-align: left; }
             .day-tabs { flex-direction: column; }
             .day-tab { width: 100%; text-align: center; }
             .stats-grid { grid-template-columns: 1fr; }
             .controls-section { flex-direction: column; align-items: stretch; }
-            .buttons-container { order: 1; justify-content: center; }
-            .search-container { order: 2; min-width: auto; }
+            .buttons-container { order: 1; justify-content: stretch; gap: 6px; }
+            .buttons-container button { flex: 1 1 calc(50% - 6px); min-height: 42px; }
+            .search-container { order: 2; min-width: auto; flex-direction: column; }
+            .search-container input, .search-container select { width: 100%; min-width: 0; }
+            #promotionsContainer, #promotionsContainer.blocks-mode { grid-template-columns: 1fr; }
+            .programming-table, .import-preview-table { display: block; overflow-x: auto; white-space: nowrap; }
+            .calendar-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+            .calendar-header { display: none; }
+            .calendar-day { min-height: 82px; }
+            .modal { padding: 10px; align-items: flex-start; }
+            .modal-content { max-height: calc(100vh - 20px); padding: 18px; }
         }
         .hidden { display: none !important; }
         
@@ -314,35 +338,30 @@
                 <input type="text" id="daySearchInput" placeholder="Buscar promociones...">
                 <select id="daySearchCategory">
                     <option value="">- Filtro -</option>
-                    <optgroup label="📺 CATEGORÍAS">
-                        <option value="diario">DIARIO</option>
-                        <option value="streaming">STREAMING</option>
-                        <option value="radio">RADIO</option>
-                        <option value="mundial">MUNDIAL</option>
-                        <option value="apagon">APAGÓN</option>
-                        <option value="momento_simpson">MOMENTO SIMPSON</option>
-                        <option value="masterchef">MASTERCHEF</option>
-                        <option value="presentacion">PRESENTACIÓN</option>
-                        <option value="despedida">DESPEDIDA</option>
-                    </optgroup>
-                    <optgroup label="📍 LOCALES">
-                        <option value="local_scz">SANTA CRUZ (SC)</option>
-                        <option value="local_lp">LA PAZ (LP)</option>
-                        <option value="local_ch">COCHABAMBA (CH)</option>
-                    </optgroup>
                 </select>
+
             </div>
             <div class="buttons-container">
                 <button onclick="openAddPromotionModal()" id="btnAddPromo">➕ Agregar Promoción</button>
                 <button id="btnFilterPending" onclick="toggleFilterPending(this)" style="background:linear-gradient(135deg,#f39c12 0%,#d68910 100%);">🔍 Pendientes</button>
                 <button onclick="openImportXlsModal()" id="btnImportDay" style="background:linear-gradient(135deg,#7b2ff7 0%,#5a1fcf 100%);">📥 Importar</button>
                 <button onclick="openCopyPromotionsModal()" class="warning" id="btnCopyPromo">📋 Copiar</button>
+
+                <button onclick="openAdminCategoriesModal()" id="btnAdminCategories" style="background:linear-gradient(135deg,#0ea5e9 0%,#0369a1 100%);display:none;">🛠️ Admin Categorías</button>
+
+                <button id="btnReorderMode" onclick="toggleReorderMode(this)" style="background:linear-gradient(135deg,#0ea5e9 0%,#0369a1 100%);display:none;">🧲 Reordenar</button>
+
+                <button onclick="setPromotionsViewMode('blocks')" class="success" id="btnViewBlocks">🟦 Bloques</button>
+                <button onclick="setPromotionsViewMode('vertical')" class="success" id="btnViewVertical">📄 Vertical</button>
+
                 <button onclick="exportToExcel()" class="success">📊 Exportar Excel</button>
+                <button onclick="exportWeeklyExcel()" class="success">📊 Exportar Semana Completa</button>
                 <button onclick="openMailClient()" class="success">✉️ Enviar por Correo</button>
                 <button onclick="cleanDayPromotions()" id="btnCleanDay" class="warning">🧹 Limpiar Día</button>
                 <button onclick="cleanWeekPromotions()" id="btnDeleteWeek" class="warning">🧹 Limpiar Semana</button>
                 <button onclick="deleteDayPromotions()" id="btnDeleteDay" class="danger">🗑️ Eliminar Día</button>
             </div>
+
         </div>
         <h3>📢 Promociones</h3>
         <div id="promotionsContainer"></div>
@@ -358,7 +377,13 @@
                 <div style="font-size:13px;color:#7f8c8d;margin-top:4px;">Carga el archivo .xlsm con las hojas Lunes→Domingo y crea todas las promociones de la semana de una vez</div>
             </div>
             <button id="btnImportWeekly" onclick="openImportWeeklyModal()" style="background:linear-gradient(135deg,#7b2ff7 0%,#5a1fcf 100%);white-space:nowrap;">
-                📋 Importar XLSM Semanal
+                📋 Importar EXEL Semanal
+            </button>
+            <button id="btnImportNextWeek" onclick="openImportWeeklyModalForNextWeek()" style="background:linear-gradient(135deg,#27ae60 0%,#1e8449 100%);white-space:nowrap;">
+                💾 Guardar EXEL Próxima Semana
+            </button>
+            <button id="btnViewSavedXlsm" onclick="viewSavedXlsms()" style="background:linear-gradient(135deg,#f59e0b 0%,#d97706 100%);white-space:nowrap;">
+                📥 Ver EXEL Guardados
             </button>
             <button id="btnDeleteWeekFull" onclick="deleteWeekPromotions()" class="danger" style="white-space:nowrap;">
                 🗑️ Eliminar Semana Completa
@@ -439,20 +464,9 @@
         </div>
         <div class="form-group">
             <label>Categoría</label>
+            <!-- Se llena dinámicamente desde Supabase (promo_categories) en app.js -->
             <select id="promotionCategory">
                 <option value="">- Seleccionar -</option>
-                <option value="diario">DIARIO</option>
-                <option value="streaming">STREAMING</option>
-                <option value="radio">RADIO</option>
-                <option value="digital">DIGITAL</option>
-                <option value="mundial">MUNDIAL</option>
-                <option value="apagon">APAGON</option>
-                <option value="deportes">DEPORTES</option>
-                <option value="momento_simpson">MOMENTO SIMPSON</option>
-                <option value="id">ID</option>
-                <option value="masterchef">MASTERCHEF</option>
-                <option value="presentacion">PRESENTACIÓN</option>
-                <option value="despedida">DESPEDIDA</option>
             </select>
         </div>
         <div class="form-group">
@@ -462,9 +476,50 @@
                 <option value="local_scz">LOCAL SCZ</option>
                 <option value="local_lp">LOCAL LP</option>
                 <option value="local_ch">LOCAL CH</option>
-                <option value="caracteristica">COLOCAR LA CARACTERÍSTICA</option>
+                <option value="local_scz_lp">LOCAL SCZ - LP</option>
+                <option value="local_scz_ch">LOCAL SCZ - CH</option>
+                <option value="local_lp_ch">LOCAL LP - CH</option>
             </select>
         </div>
+        <div class="form-group">
+            <label>📅 ¿A qué día(s) agregar?</label>
+            <div style="display:flex;flex-direction:column;gap:10px;width:100%;">
+                <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+                    <input type="radio" name="promoDestMode" value="only_current" checked>
+                    <span>Solo al día seleccionado</span>
+                </label>
+
+                <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+                    <input type="radio" name="promoDestMode" value="multiple">
+                    <span>Agregar también a otros días</span>
+                </label>
+
+                <div id="promoDestDaysWrap" style="display:none;flex-wrap:wrap;gap:8px;">
+                    <label style="display:flex;align-items:center;gap:8px;font-weight:500;">
+                        <input type="checkbox" class="promo-dest-day" value="monday"> Lunes
+                    </label>
+                    <label style="display:flex;align-items:center;gap:8px;font-weight:500;">
+                        <input type="checkbox" class="promo-dest-day" value="tuesday"> Martes
+                    </label>
+                    <label style="display:flex;align-items:center;gap:8px;font-weight:500;">
+                        <input type="checkbox" class="promo-dest-day" value="wednesday"> Miércoles
+                    </label>
+                    <label style="display:flex;align-items:center;gap:8px;font-weight:500;">
+                        <input type="checkbox" class="promo-dest-day" value="thursday"> Jueves
+                    </label>
+                    <label style="display:flex;align-items:center;gap:8px;font-weight:500;">
+                        <input type="checkbox" class="promo-dest-day" value="friday"> Viernes
+                    </label>
+                    <label style="display:flex;align-items:center;gap:8px;font-weight:500;">
+                        <input type="checkbox" class="promo-dest-day" value="saturday"> Sábado
+                    </label>
+                    <label style="display:flex;align-items:center;gap:8px;font-weight:500;">
+                        <input type="checkbox" class="promo-dest-day" value="sunday"> Domingo
+                    </label>
+                </div>
+            </div>
+        </div>
+
         <div class="form-group">
             <label>Comentarios</label>
             <textarea id="promotionComments" placeholder="Comentarios sobre la promoción..."></textarea>
@@ -473,17 +528,33 @@
             <button onclick="closeModal('promotionModal')">Cancelar</button>
             <button class="success" onclick="savePromotion()">💾 Guardar</button>
         </div>
+
+        <script>
+            // Control UI del destino de días dentro del modal
+            (function(){
+                const modeRadios = document.getElementsByName('promoDestMode');
+                const wrap = document.getElementById('promoDestDaysWrap');
+                function sync(){
+                    if(!wrap) return;
+                    const selected = Array.from(modeRadios).find(r => r.checked);
+                    wrap.style.display = selected && selected.value === 'multiple' ? 'flex' : 'none';
+                }
+                modeRadios && Array.from(modeRadios).forEach(r => r.addEventListener('change', sync));
+                sync();
+            })();
+        </script>
+
     </div>
 </div>
 
 <!-- MODAL: IMPORT XLS -->
 <div class="modal" id="importXlsModal">
     <div class="modal-content" style="max-width:700px;">
-        <div class="modal-header">📥 Importar Promociones desde XLS</div>
+        <div class="modal-header">📥 Importar Promociones desde EXEL</div>
         <div id="importStep1">
             <div class="import-drop-zone" id="importDropZone" onclick="document.getElementById('importFileInput').click()">
                 <div class="drop-icon">📂</div>
-                <div class="drop-text">Arrastra el archivo XLS aquí o haz clic para seleccionar</div>
+                <div class="drop-text">Arrastra el archivo EXEL aquí o haz clic para seleccionar</div>
                 <div class="drop-hint">Archivos tipo: SCZ MIERCOLES 29 ABRIL 2026.xls</div>
             </div>
             <input type="file" id="importFileInput" accept=".xls,.xlsx" style="display:none" onchange="handleImportFile(event)">
@@ -575,7 +646,7 @@
 <!-- MODAL: IMPORTAR XLSM SEMANAL -->
 <div class="modal" id="weeklyImportModal">
     <div class="modal-content" style="max-width:680px;">
-        <div class="modal-header">📋 Importar Programación Semanal (XLSM)</div>
+        <div class="modal-header">📋 Importar Programación Semanal (EXEL)</div>
         <div id="weeklyImportStep1">
             <div class="import-drop-zone" id="weeklyImportDropZone" onclick="document.getElementById('weeklyImportFileInput').click()">
                 <div class="drop-icon">📂</div>
@@ -599,6 +670,13 @@
                 </table>
             </div>
             <div class="form-group">
+                <label>🎯 ¿Dónde importar?</label>
+                <select id="weeklyImportDestination" style="width:100%;" onchange="updateWeeklyImportMode()">
+                    <option value="current">📅 Semana Actual (importar directamente)</option>
+                    <option value="next">💾 Próxima Semana (guardar en BD para luego descargar)</option>
+                </select>
+            </div>
+            <div class="form-group" id="conflictModeGroup">
                 <label>⚠️ Si ya existen promociones en un día:</label>
                 <select id="weeklyImportConflictMode" style="width:100%">
                     <option value="append">➕ Agregar las nuevas (mantener las existentes)</option>
@@ -606,15 +684,86 @@
                     <option value="skip_duplicates">🔍 Solo agregar las que no existan (por código)</option>
                 </select>
             </div>
-            <div style="background:#e3f2fd;border-left:4px solid #1565c0;padding:12px 16px;border-radius:8px;font-size:13px;color:#1565c0;">
+            <div id="nextWeekInfoBox" style="display:none;background:#e3f2fd;border-left:4px solid #1565c0;padding:12px 16px;border-radius:8px;font-size:13px;color:#1565c0;">
+                💡 Se guardará en la base de datos de Supabase y podrás descargarlo desde "Ver EXEL Guardados".
+            </div>
+            <div id="currentWeekInfoBox" style="background:#e3f2fd;border-left:4px solid #1565c0;padding:12px 16px;border-radius:8px;font-size:13px;color:#1565c0;">
                 💡 Las promociones se importarán con estado <strong>PENDIENTE</strong>. Cada operador deberá marcarlas como OK o ERROR.
             </div>
         </div>
         <div class="modal-actions">
             <button onclick="closeModal('weeklyImportModal')">Cancelar</button>
-            <button id="weeklyImportConfirmBtn" onclick="executeWeeklyImport()" style="display:none;background:linear-gradient(135deg,#7b2ff7 0%,#5a1fcf 100%);">
-                ✅ Importar Semana Completa
+            <button id="weeklyImportConfirmBtn" onclick="executeWeeklyImportAction()" style="display:none;background:linear-gradient(135deg,#7b2ff7 0%,#5a1fcf 100%);">
+                ✅ Confirmar
             </button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: GUARDAR XLSM PRÓXIMA SEMANA -->
+<div class="modal" id="saveNextWeekModal">
+    <div class="modal-content" style="max-width:680px;">
+        <div class="modal-header">💾 Guardar EXEL - Próxima Semana</div>
+        <div style="background:#e3f2fd;border-left:4px solid #1565c0;padding:12px 16px;border-radius:8px;font-size:13px;color:#1565c0;margin-bottom:20px;">
+            💡 Esto guardará un archivo Excel con toda la programación de próxima semana en Supabase. Podrás descargarlo desde cualquier lugar.
+        </div>
+        <div class="form-group">
+            <label>📅 Rango de la Semana:</label>
+            <input type="text" id="nextWeekLabel" placeholder="Ej: 15 - 21 Junio 2026" readonly style="background:#f9fafb;">
+        </div>
+        <div style="background:#f9fafb;border:1px solid #e0e6ed;border-radius:8px;padding:15px;margin-bottom:15px;">
+            <div style="font-weight:600;color:#1e3c72;margin-bottom:10px;">📊 Resumen de Datos a Guardar:</div>
+            <div id="nextWeekSavePreview" style="font-size:13px;color:#7f8c8d;">
+                <p>Cargando información...</p>
+            </div>
+        </div>
+        <div class="modal-actions">
+            <button onclick="closeModal('saveNextWeekModal')">Cancelar</button>
+            <button class="success" onclick="executeNextWeekSaveXlsm()" style="background:linear-gradient(135deg,#27ae60 0%,#1e8449 100%);">
+                💾 Guardar en Supabase
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: VER EXEL GUARDADOS -->
+<div class="modal" id="viewSavedXlsmModal">
+    <div class="modal-content" style="max-width:700px;">
+        <div class="modal-header">📥 EXEL Guardados de Próxima Semana</div>
+        <div id="savedXlsmsList" style="max-height:400px;overflow-y:auto;">
+            <p style="text-align:center;color:#7f8c8d;">Cargando archivos...</p>
+        </div>
+        <div class="modal-actions">
+            <button onclick="closeModal('viewSavedXlsmModal')">Cerrar</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: ADMIN CATEGORÍAS -->
+<div class="modal" id="adminCategoriesModal">
+    <div class="modal-content" style="max-width:800px;">
+        <div class="modal-header" id="adminCategoriesTitle">🛠️ Admin Categorías</div>
+
+        <div id="adminCategoriesLoading" style="display:block;margin-bottom:10px;color:#7f8c8d;font-weight:600;">Cargando...</div>
+        <div id="adminCategoriesList" style="margin-bottom:18px;"></div>
+
+        <div style="background:#f9fafb;border:1px solid #e0e6ed;border-radius:12px;padding:15px;margin-bottom:18px;">
+            <div style="font-weight:800;color:#1e3c72;margin-bottom:10px;">➕ Crear categoría</div>
+            <div class="form-group" style="margin-bottom:0;">
+                <div style="flex:1;min-width:240px;">
+                    <label>Slug (clave interna)</label>
+                    <input type="text" id="newPromoCategorySlug" placeholder="ej: diario" maxlength="60" style="width:100%;" />
+                </div>
+                <div style="flex:1;min-width:240px;">
+                    <label>Label (texto UI)</label>
+                    <input type="text" id="newPromoCategoryLabel" placeholder="ej: DIARIO" maxlength="80" style="width:100%;" />
+                </div>
+            </div>
+        </div>
+
+        <div class="modal-actions">
+            <button onclick="closeModal('adminCategoriesModal')">Cerrar</button>
+            <button class="success" onclick="createPromoCategory()">💾 Crear</button>
         </div>
     </div>
 </div>
